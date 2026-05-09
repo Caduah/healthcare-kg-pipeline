@@ -1,0 +1,100 @@
+version: '3.8'
+JAVA_HOME: /usr/lib/jvm/java-17-openjdk-arm64
+    PATH: /usr/lib/jvm/java-17-openjdk-arm64/bin:/usr/local/bin:/usr/bin:/bin
+x-airflow-common: &airflow-common
+  image: apache/airflow:2.9.1
+  environment:
+    AIRFLOW__CORE__EXECUTOR: LocalExecutor
+    AIRFLOW__DATABASE__SQL_ALCHEMY_CONN: postgresql+psycopg2://healthuser:healthpass@postgres/airflow_db
+    AIRFLOW__CORE__FERNET_KEY: ''
+    AIRFLOW__CORE__DAGS_ARE_PAUSED_AT_CREATION: 'true'
+    AIRFLOW__CORE__LOAD_EXAMPLES: 'false'
+    AIRFLOW__API__AUTH_BACKENDS: 'airflow.api.auth.backend.basic_auth'
+    PYTHONPATH: /opt/airflow
+    POSTGRES_HOST: postgres
+    POSTGRES_PORT: 5432
+    POSTGRES_USER: healthuser
+    POSTGRES_PASSWORD: healthpass
+    POSTGRES_DB: healthdb
+  volumes:
+    - ./airflow/dags:/opt/airflow/dags
+    - ./airflow/logs:/opt/airflow/logs
+    - ./airflow/plugins:/opt/airflow/plugins
+    - ./data:/opt/airflow/data
+    - ./spark:/opt/airflow/spark
+    - ./ingestion:/opt/airflow/ingestion
+    - ./quality:/opt/airflow/quality
+    - ./entity_resolution:/opt/airflow/entity_resolution
+    - ./enrichment:/opt/airflow/enrichment
+    - ./graph:/opt/airflow/graph
+  depends_on:
+    postgres:
+      condition: service_healthy
+
+services:
+
+  postgres:
+    image: postgres:15
+    container_name: healthcare_db
+    environment:
+      POSTGRES_USER: healthuser
+      POSTGRES_PASSWORD: healthpass
+      POSTGRES_DB: healthdb
+    ports:
+      - "5433:5432"
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD", "pg_isready", "-U", "healthuser", "-d", "healthdb"]
+      interval: 10s
+      retries: 5
+      start_period: 5s
+    restart: unless-stopped
+
+  neo4j:
+    image: neo4j:5.19
+    container_name: healthcare_neo4j
+    environment:
+      NEO4J_AUTH: neo4j/neo4j_pass
+    ports:
+      - "7474:7474"
+      - "7687:7687"
+    volumes:
+      - neo4j_data:/data
+      - neo4j_logs:/logs
+    restart: unless-stopped
+
+  airflow-init:
+    <<: *airflow-common
+    container_name: healthcare_airflow_init
+    command: >
+      bash -c "
+        airflow db migrate &&
+        airflow users create
+          --username admin
+          --password admin
+          --firstname Admin
+          --lastname User
+          --role Admin
+          --email admin@healthcare.com || true
+      "
+    restart: on-failure
+
+  airflow-webserver:
+    <<: *airflow-common
+    container_name: healthcare_airflow_web
+    command: webserver
+    ports:
+      - "8080:8080"
+    restart: always
+
+  airflow-scheduler:
+    <<: *airflow-common
+    container_name: healthcare_airflow_scheduler
+    command: scheduler
+    restart: always
+
+volumes:
+  pgdata:
+  neo4j_data:
+  neo4j_logs:

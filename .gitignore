@@ -1,0 +1,11 @@
+data/
+output/
+*.jar
+*.csv
+*.json
+__pycache__/
+*.pyc
+*.egg-info/
+.env
+airflow/logs/
+mlruns/

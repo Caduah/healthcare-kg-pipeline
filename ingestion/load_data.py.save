@@ -1,0 +1,12 @@
+import pandas as pd
+import psycopg2
+from sqlalchemy import create_engine
+
+# Connection to our Docker PostgreSQL
+engine = create_engine(
+    "postgresql://healthuser:healthpass@localhost:5433/healthdb"
+)
+
+CSV_PATH = "output/csv/"
+
+# Order matters 
